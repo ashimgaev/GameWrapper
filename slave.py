@@ -31,7 +31,7 @@ class SlaveClient(MqttPoint):
     def startConfigRequestLoop(self, execTarget: str, on_reply_cb, pre_request_cb, config_loop_period: int):
         self.config_request_loop_period = config_loop_period
         def send_request_func():
-            if self.config_request_loop[0]:
+            if self.config_request_loop[0] and self.config_request_loop_period > 0:
                 msg = Data_SlaveConfigRequest(section_name=execTarget)
                 if pre_request_cb:
                     pre_request_cb(execTarget)
@@ -52,6 +52,7 @@ class SlaveClient(MqttPoint):
 
     def stop(self):
         super().stop()
+        self.setConfigLoopPeriod(0)
         self.stopConfigRequestLoop()
 
 def main():

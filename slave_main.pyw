@@ -8,7 +8,33 @@ from data import *
 import re
 import threading
 
+lang = 1  # 0- enflish, 1 -rus
 
+class Strings(enum.Enum):
+    UNKNOWN = 0
+    STR_OK = 1
+    STR_BLOCKED = 2,
+    STR_WRONG_PASSWORD = 3
+    STR_ENTER_PWD = 4
+    STR_PASSWORD = 5
+    STR_TIME = 6
+    STR_ACCESS_REQUEST = 7
+    STR_STATUS = 8
+    
+LanguageMap = {
+	Strings.UNKNOWN: ("UNKNOWN", "Ошибка"),
+	Strings.STR_OK: ("OK", "ОК"),
+	Strings.STR_BLOCKED: ("BLOCKED", "Заблокировано"),
+	Strings.STR_WRONG_PASSWORD: ("Wrong password", "Неверный пароль"),
+	Strings.STR_ENTER_PWD: ("Enter password", "Введите пароль"),
+	Strings.STR_PASSWORD: ("Password: ", "Пароль: "),
+	Strings.STR_TIME: ("Time: ", "Время: "),
+	Strings.STR_ACCESS_REQUEST: ("Request access", "Запрашиваю разрешение"),
+	Strings.STR_STATUS: ("Status: ", "Статус: "),
+}
+
+def getString(s: Strings):
+	return LanguageMap[s][lang]
 
 class App:
 	# Path to config file
@@ -33,6 +59,14 @@ class App:
 
 	gStopThread: threading.Timer
 
+	gElipces = ""
+
+	def nextElipces():
+		if len(App.gElipces) >= 3:
+			App.gElipces = ""
+		App.gElipces = App.gElipces + "."
+		return App.gElipces
+
 	window: sg.Window
 	pwdButton = sg.Button("OK", key='pwdButtonId')
 	pwdInput = sg.InputText(size=(65, 1), password_char='*', key='pwdInputId')
@@ -41,7 +75,10 @@ class App:
 
 def setStatus(msg: str):
 	print(f'Status: {msg}')
-	#App.statusLine.update(value=str)
+	try:
+		App.window['statusInputId'].update(value=msg)
+	except:
+		pass
 
 def onSuperUserMode():
 	App.gSuperUserMode = True
@@ -52,7 +89,7 @@ def onGameTimeout():
 	stopGame()
 
 def stopGame():
-	setStatus('BLOCKED')
+	setStatus(getString(Strings.STR_BLOCKED))
 	with subprocess.Popen(f"tasklist", stdout=subprocess.PIPE, shell=True, text=True, encoding='UTF-8') as proc:
 		str, _ = proc.communicate()
 		proc_name = App.gConfigFile.getParam(App.gGameCfgSection, ConfigSchema.PARAM_NAME_PROC_NAME)
@@ -107,20 +144,32 @@ def launchGame(pwd: str):
 		onSuperUserMode()
 	
 	if goodPwdFlag or superUserFlag:
+		App.gSlaveClient.stop()
 		startGame()
 		timeLimit = App.timeInput.get()
 		if len(timeLimit) > 0:
 			startStopTimer(int(timeLimit)*60)
 	else:
-		setStatus('Wrong password')
+		setStatus(getString(Strings.STR_WRONG_PASSWORD))
 		print('Wrong password!!!')
 
-layout = [
-	[sg.Text("Please enter password")], 
-	[sg.Text('Password:', justification='right'), App.pwdInput,],
-	[sg.Text(text='Time:', justification='right'), App.timeInput,],
-	[App.pwdButton]
-	]
+def doAppLoop():
+	def onMasterRequest(message):
+		print(f'master request: {str(message)}')
+		if message.msg_type == MessageType.MASTER_REQUEST_CONFIG_UPDATE:
+			updateConfig(message.cfg_section)
+			checkConfig(message.cfg_section)
+
+	def onConfigReply(message: Data_ConfigSection):
+		updateConfig(message)
+		checkConfig(message)
+
+	def onConfigRequest(cfgName):
+		setStatus(getString(Strings.STR_ACCESS_REQUEST) + App.nextElipces())
+
+	App.gSlaveClient = SlaveClient()
+	App.gSlaveClient.start(onMasterRequest)
+	App.gSlaveClient.startConfigRequestLoop(App.gGameCfgSection, onConfigReply, onConfigRequest, 10)
 
 def main():
 	_, *params = sys.argv
@@ -139,27 +188,18 @@ def main():
 
 	App.gGameCfgSection = params[0]
 
+	layout = [
+		[sg.Text(getString(Strings.STR_ENTER_PWD))], 
+		[sg.Text(getString(Strings.STR_PASSWORD), justification='right'), App.pwdInput,],
+		[sg.Text(text=getString(Strings.STR_TIME), justification='right'), App.timeInput,],
+		[sg.Text(getString(Strings.STR_STATUS), justification='right'), App.statusLine,],
+		[App.pwdButton]
+	]
+
 	# Create the window
-	App.window = sg.Window("Game launcher 1.0", layout)
+	App.window = sg.Window(f"Game launcher 1.0 - {App.gGameCfgSection}", layout)
 
-	def onMasterRequest(message):
-		print(f'master request: {str(message)}')
-		if message.msg_type == MessageType.MASTER_REQUEST_CONFIG_UPDATE:
-			updateConfig(message.cfg_section)
-			checkConfig(message.cfg_section)
-
-	def onConfigReply(message: Data_ConfigSection):
-		updateConfig(message)
-		checkConfig(message)
-
-	def onConfigRequest(cfgName):
-		setStatus(f'Requesting config [{cfgName}]')
-
-	App.gSlaveClient = SlaveClient()
-	App.gSlaveClient.start(onMasterRequest)
-	App.gSlaveClient.startConfigRequestLoop(App.gGameCfgSection, onConfigReply, onConfigRequest, 10)
-
-	setStatus('Requesting for remote access...')
+	threading.Timer(1, doAppLoop).start()
 
 	# Create an event loop
 	while True:
@@ -179,6 +219,7 @@ def main():
 				if App.gExit:
 					break
 			elif event == sg.WIN_CLOSED:
+				App.gExit = True
 				break
 		except:
 			pass
