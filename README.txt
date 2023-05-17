@@ -1,5 +1,3 @@
-Follow https://www.hivemq.com/blog/mqtt-client-library-paho-python/
-
 For master:
 - install FastAPI (follow https://fastapi.tiangolo.com/)
 	pip install fastapi
