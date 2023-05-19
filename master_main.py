@@ -7,7 +7,7 @@ import json
 import sys
 from pydantic import BaseModel
 from master import Master
-from config_file import ConfigFile, ConfigSchema
+from config_file import ConfigFile, ConfigSchema, CfgSectionWrapper, makeNewSection
 
 serverArgParser = argparse.ArgumentParser(description='SBC Rest API Server',
                                  prog=sys.argv[0],
@@ -40,20 +40,28 @@ class MasterServer:
 
     def start(self):
         print("Server started")
-        self.is_active = True
-        def on_config_request(cfgname: str):
-            is_allowed = self.configFile.getParam(cfgname, ConfigSchema.PARAM_NAME_ALLOWED)
-            remote_allowed = is_allowed.lower() in ['true', '1', 'y', 'yes']
-            return Data_ConfigSection(name=cfgname, 
-                                     pwd=self.configFile.getParam(cfgname, ConfigSchema.PARAM_NAME_PASSWORD),
-                                     remote_accepted=remote_allowed)
-        self.masterClient.start(on_config_request)
+        def on_slave_message(msg):
+            if self.is_active == True:
+                if msg.msg_type == MessageType.SLAVE_REQUEST_CONFIG:
+                    cfg = CfgSectionWrapper(self.configFile, msg.msg_payload)
+                    out = Data_ConfigSection(name=cfg.getName(), 
+                                            pwd=cfg.getPassword(),
+                                            remote_accepted=cfg.getAllowed())
+                    self.masterClient.sendConfigRequestReply(reqMessage=msg, cfg_section=out)
+        self.masterClient.start(on_slave_message)
 
     def stop(self):
         print("Server stopped")
         self.masterClient.stop()
         self.is_active = False
 
+    def resume(self):
+        print("Server resumed")
+        self.is_active = True
+
+    def suspend(self):
+        print("Server suspended")
+        self.is_active = False
 
 class MasterApp:
     server: MasterServer
@@ -61,6 +69,7 @@ class MasterApp:
 def master_app_onstart():
     print('master_app_onstart called')
     MasterApp.server = MasterServer()
+    MasterApp.server.start()
 
 def master_app_onstop():
     print('master_app_onstop called')
@@ -115,39 +124,51 @@ def master_get_status():
 @masterapi.post("/master/status", response_model=MasterStatusResponse)
 def master_set_status(reqBody: MasterStatusRequest):
     if reqBody.is_active:
-        MasterApp.server.start()
+        MasterApp.server.resume()
     else:
-        MasterApp.server.stop()
+        MasterApp.server.suspend()
     return MasterStatusResponse(is_active=MasterApp.server.isActive())
 
 @masterapi.get("/master/config", response_model=ConfigResponse)
 def get_config():
     sections = list[ConfigSection]()
-    cfg = MasterApp.server.configFile
-    for name in cfg.getSections():
-        sections.append(ConfigSection(name=name, 
-                                      pwd=cfg.getParam(name, ConfigSchema.PARAM_NAME_PASSWORD), 
-                                      allowed=cfg.getParam(name, ConfigSchema.PARAM_NAME_ALLOWED)))
+    cfgFile = MasterApp.server.configFile
+    for name in cfgFile.getSections():
+        cfg = CfgSectionWrapper(cfgFile, name)
+        sections.append(ConfigSection(name=cfg.getName(), 
+                                      pwd=cfg.getPassword(), 
+                                      allowed=cfg.getAllowed()))
     response = ConfigResponse(sections=sections)
     return response
+
+@masterapi.get("/master/config/sync", response_model=BaseResponse)
+def sync_config():
+    def onReply(msg):
+        if msg.msg_type == MessageType.SLAVE_REPLY_CONFIG_LIST and msg.cfg_sections and len(msg.cfg_sections) > 0:
+            MasterApp.server.configFile.clear()
+            for s in msg.cfg_sections:
+                cfg = makeNewSection(MasterApp.server.configFile, s.name)
+                cfg.setPassword(s.pwd)
+            MasterApp.server.configFile.write()
+
+    MasterApp.server.masterClient.sendConfigListRequest(on_reply_cb=onReply)
+    return BaseResponse(status='OK')
 
 @masterapi.post("/master/config", response_model=BaseResponse)
 def set_config(reqBody: ConfigRequest):
     needUpdate = False
     cfgFile = MasterApp.server.configFile
-    for cfg in reqBody.sections:
-        currentPwd = cfgFile.getParam(section=cfg.name, name=ConfigSchema.PARAM_NAME_PASSWORD)
-        if currentPwd != cfg.pwd:
-            cfgFile.setParam(section=cfg.name, name=ConfigSchema.PARAM_NAME_PASSWORD, val=cfg.pwd)
+    for newCfg in reqBody.sections:
+        currCfg = CfgSectionWrapper(cfgFile, newCfg.name)
+        if currCfg.getPassword() != newCfg.pwd:
+            currCfg.setPassword(val=newCfg.pwd)
             needUpdate = True
-        cfgFile.setParam(section=cfg.name, name=ConfigSchema.PARAM_NAME_ALLOWED, val=str(cfg.allowed))
+        currCfg.setAllowed(val=newCfg.allowed)
         # Notify slave
-        is_allowed = cfgFile.getParam(cfg.name, ConfigSchema.PARAM_NAME_ALLOWED)
-        remote_allowed = is_allowed.lower() in ['true', '1', 'y', 'yes']
-        cfg = Data_ConfigSection(name=cfg.name, 
-                                pwd=cfgFile.getParam(cfg.name, ConfigSchema.PARAM_NAME_PASSWORD),
-                                remote_accepted=remote_allowed)
-        MasterApp.server.masterClient.sendConfigUpdateRequest(cfg)
+        msgCfg = Data_ConfigSection(name=currCfg.getName(), 
+                                pwd=currCfg.getPassword(),
+                                remote_accepted=currCfg.getAllowed())
+        MasterApp.server.masterClient.sendConfigUpdateRequest(msgCfg)
     
     if needUpdate:
         cfgFile.write()

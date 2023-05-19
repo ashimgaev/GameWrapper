@@ -9,25 +9,29 @@ class Master(MqttPoint):
             pass
         return cb_func
     
-    def makeOnRequestCallback(self_inst):
+    def makeOnSlaveRequestCallback(self_inst):
         def cb_func(reqMessage: Data_MessageBase):
-            if self_inst._on_config_request_cb:
-                cfg = self_inst._on_config_request_cb(reqMessage.msg_payload)
-                if cfg:
-                    self_inst.sendConfigRequestReply(reqMessage, cfg)
+            if self_inst._on_slave_request_cb:
+                self_inst._on_slave_request_cb(reqMessage)
         return cb_func
 
     def __init__(self):
         super().__init__(name="Master", 
-                         listen_channel="com.ashimgaev.home/channel/slave", 
-                         request_channel="com.ashimgaev.home/channel/master",
-                         on_request_cb=Master.makeOnRequestCallback(self))
-        self._on_config_request_cb = None
+                         listen_channel="com.ashimgaev.home/channel/slave_dbg", 
+                         request_channel="com.ashimgaev.home/channel/master_dbg",
+                         on_request_cb=Master.makeOnSlaveRequestCallback(self))
+        self._on_slave_request_cb = None
 
 
     def sendConfigUpdateRequest(self, cfg_section: Data_ConfigSection):
         msg = Data_MasterConfigUpdateRequest(cfg_section=cfg_section)
         self.sendMessage(msg)
+
+    def sendConfigListRequest(self, on_reply_cb):
+        def onReply(msg):
+            if on_reply_cb:
+                on_reply_cb(msg)
+        self.sendMessage(Data_MasterConfigListRequest(), onReply)
 
     def sendConfigRequestReply(self, reqMessage: Data_MessageBase, cfg_section: Data_ConfigSection):
         msg = Data_MasterConfigReply(cfg_section=cfg_section)
@@ -35,9 +39,9 @@ class Master(MqttPoint):
         self.sendMessage(msg)
 
     def start(self, on_config_request_cb):
-        self._on_config_request_cb = on_config_request_cb
+        self._on_slave_request_cb = on_config_request_cb
         super().start()
 
     def stop(self):
-        self._on_config_request_cb = None
+        self._on_slave_request_cb = None
         super().stop()

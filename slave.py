@@ -10,16 +10,10 @@ class SlaveClient(MqttPoint):
                 self_inst.on_request_cb(mesage)
         return cb_func
     
-    def makeOnConfigReplyCallback(self_inst, on_reply_cb):
-        def cb_func(mesage: Data_MasterConfigReply):
-            if on_reply_cb:
-                on_reply_cb(mesage.cfg_section)
-        return cb_func
-
     def __init__(self):
         super().__init__(name="Slave", 
-                         listen_channel="com.ashimgaev.home/channel/master", 
-                         request_channel="com.ashimgaev.home/channel/slave", 
+                         listen_channel="com.ashimgaev.home/channel/master_dbg", 
+                         request_channel="com.ashimgaev.home/channel/slave_dbg", 
                          on_request_cb=SlaveClient.makeOnRequestCallback(self))
         self.on_request_cb = None
         self.config_request_loop = (False,  threading.Timer)
@@ -35,7 +29,10 @@ class SlaveClient(MqttPoint):
                 msg = Data_SlaveConfigRequest(section_name=execTarget)
                 if pre_request_cb:
                     pre_request_cb(execTarget)
-                self.sendMessage(msg, SlaveClient.makeOnConfigReplyCallback(self, on_reply_cb))
+                def on_reply(mesage: Data_MasterConfigReply):
+                    if on_reply_cb:
+                        on_reply_cb(mesage.cfg_section)
+                self.sendMessage(msg, on_reply)
                 self.config_request_loop = (True, threading.Timer(self.config_request_loop_period, send_request_func))
                 self.config_request_loop[1].start()
         self.config_request_loop = (True, None)
@@ -54,6 +51,11 @@ class SlaveClient(MqttPoint):
         super().stop()
         self.setConfigLoopPeriod(0)
         self.stopConfigRequestLoop()
+
+    def sendConfigListReply(self, reqMessage: Data_MessageBase, cfg_sections: list[Data_ConfigSection]):
+        msg = Data_SlaveConfigListReply(cfg_sections=cfg_sections)
+        msg.uuid = reqMessage.uuid
+        self.sendMessage(msg)
 
 def main():
 

@@ -20,6 +20,7 @@ class MasterService {
     constructor(address) {
         this.address = address
         this.configUrl = this.address + "config";
+        this.configSyncUrl = this.address + "config/sync";
         this.statusUrl = this.address + "status";
     }
 
@@ -33,6 +34,10 @@ class MasterService {
 
     getAllConfigs() {
         return doGet(this.configUrl);
+    }
+
+    syncConfig() {
+        return doGet(this.configSyncUrl);
     }
 
     updateConfigs(jSections) {

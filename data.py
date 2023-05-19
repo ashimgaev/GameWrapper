@@ -7,8 +7,10 @@ from dataclasses import dataclass
 class MessageType(enum.Enum):
     UNKNOWN = 0
     SLAVE_REQUEST_CONFIG = 1
+    SLAVE_REPLY_CONFIG_LIST = 10
     
     MASTER_REQUEST_CONFIG_UPDATE = 100
+    MASTER_REQUEST_CONFIG_LIST = 101
     MASTER_REPLY_CONFIG = 200
 
 
@@ -41,6 +43,11 @@ class Data_ConfigSection():
         self.pwd = pwd
         self.remote_accepted=remote_accepted
 
+class Data_SlaveConfigListReply(Data_MessageReply):
+    def __init__(self, cfg_sections: list[Data_ConfigSection]):
+        super().__init__(type=MessageType.SLAVE_REPLY_CONFIG_LIST, payload="")
+        self.cfg_sections = cfg_sections
+
 
 class Data_MasterConfigReply(Data_MessageReply):
     def __init__(self, cfg_section: Data_ConfigSection = Data_ConfigSection()):
@@ -51,3 +58,7 @@ class Data_MasterConfigUpdateRequest(Data_MessageRequest):
     def __init__(self, cfg_section: Data_ConfigSection = Data_ConfigSection()):
         super().__init__(type=MessageType.MASTER_REQUEST_CONFIG_UPDATE, payload=cfg_section.name)
         self.cfg_section = cfg_section
+
+class Data_MasterConfigListRequest(Data_MessageRequest):
+    def __init__(self):
+        super().__init__(type=MessageType.MASTER_REQUEST_CONFIG_LIST)

@@ -3,7 +3,7 @@ import os
 import sys
 import subprocess
 from slave import SlaveClient
-from config_file import ConfigFile, ConfigSchema
+from config_file import ConfigFile, ConfigSchema, CfgSectionWrapper
 from data import *
 import re
 import threading
@@ -42,10 +42,11 @@ class App:
 	CONFIG_FILE_PATH = "slave_config.ini"
 
 	# Section to find in config. Came from start params
-	gGameCfgSection = "DEFAULT"
+	gGameConfigName = "DEFAULT"
 
 	# Build config
-	gConfigFile = None
+	gConfigFile: ConfigFile
+	gGameConfig: CfgSectionWrapper
 
 	gSuperUserMode = False
 
@@ -60,6 +61,8 @@ class App:
 	gStopThread: threading.Timer
 
 	gElipces = ""
+
+	gUserName = "User"
 
 	def nextElipces():
 		if len(App.gElipces) >= 3:
@@ -90,20 +93,24 @@ def onGameTimeout():
 
 def stopGame():
 	setStatus(getString(Strings.STR_BLOCKED))
-	with subprocess.Popen(f"tasklist", stdout=subprocess.PIPE, shell=True, text=True, encoding='UTF-8') as proc:
+	proc_name = App.gGameConfig.getExecProcName()
+	with subprocess.Popen(f'tasklist /fi "USERNAME eq {App.gUserName}" /fi "IMAGENAME eq {proc_name}"', stdout=subprocess.PIPE, shell=True, text=True, encoding='UTF-8') as proc:
 		str, _ = proc.communicate()
-		proc_name = App.gConfigFile.getParam(App.gGameCfgSection, ConfigSchema.PARAM_NAME_PROC_NAME)
 		for line in str.splitlines():
-			if proc_name in line:
-				proc_id = re.findall('[0-9]+', line)[0]
+			regExResult = re.findall('(?:.*\.exe) +([0-9]+)', line)
+			if len(regExResult) > 0:
+				proc_id = regExResult[0]
 				print(f"kill {proc_id}")
-				os.kill(int(proc_id), 9)
+				try:
+					os.kill(int(proc_id), 9)
+				except:
+					print(f'Failed to stop PID {proc_id}')
 	if App.gGameStarted:
 		App.gExit = True
 		App.pwdButton.click()
 
 def startGame():
-	gamePath = App.gConfigFile.getParam(App.gGameCfgSection, ConfigSchema.PARAM_NAME_EXEC_PATH)
+	gamePath = App.gGameConfig.getExecPath()
 	if gamePath and App.gGameStarted == False:
 		print('Start game!!!')
 		App.gGameStarted = True
@@ -111,13 +118,13 @@ def startGame():
 		App.gSlaveClient.setConfigLoopPeriod(60)
 
 def updateConfig(cfg_section: Data_ConfigSection):
-	currPwd = App.gConfigFile.getParam(cfg_section.name, ConfigSchema.PARAM_NAME_PASSWORD)
-	if currPwd != cfg_section.pwd:
-		App.gConfigFile.setParam(cfg_section.name, ConfigSchema.PARAM_NAME_PASSWORD, cfg_section.pwd)
-		App.gConfigFile.write()
+	currCfg = CfgSectionWrapper(App.gConfigFile, cfg_section.name)
+	if currCfg.getPassword() != cfg_section.pwd:
+		currCfg.setPassword(cfg_section.pwd)
+		currCfg.flush()
 
 def checkConfig(cfg_section: Data_ConfigSection):
-	if not App.gSuperUserMode and App.gGameCfgSection == cfg_section.name:
+	if not App.gSuperUserMode and App.gGameConfig.getName() == cfg_section.name:
 		if cfg_section.remote_accepted == False:
 			stopGame()
 		else:
@@ -129,10 +136,10 @@ def startStopTimer(timeoutSec: int):
 	App.gStopThread.start()
 
 def checkPassword(input_pwd: str):
-	superuser_pwd = App.gConfigFile.getParam(ConfigSchema.SECTION_NAME_SUPERUSER, ConfigSchema.PARAM_NAME_PASSWORD)
-	if superuser_pwd and input_pwd == superuser_pwd:
+	suCfg = CfgSectionWrapper(App.gConfigFile, ConfigSchema.SECTION_NAME_SUPERUSER)
+	if input_pwd == suCfg.getPassword():
 		return (True, True)
-	config_pwd = App.gConfigFile.getParam(App.gGameCfgSection, ConfigSchema.PARAM_NAME_PASSWORD)
+	config_pwd = App.gGameConfig.getPassword()
 	if config_pwd:
 		return (config_pwd == input_pwd, False)
 	return (False, False)
@@ -159,6 +166,14 @@ def doAppLoop():
 		if message.msg_type == MessageType.MASTER_REQUEST_CONFIG_UPDATE:
 			updateConfig(message.cfg_section)
 			checkConfig(message.cfg_section)
+		elif message.msg_type == MessageType.MASTER_REQUEST_CONFIG_LIST:
+			out = []
+			for name in App.gConfigFile.getSections():
+				cfg = CfgSectionWrapper(App.gConfigFile, name)
+				out.append(Data_ConfigSection(name=cfg.getName(),
+				  remote_accepted=False,
+				  pwd=cfg.getPassword()))
+			App.gSlaveClient.sendConfigListReply(message, out)
 
 	def onConfigReply(message: Data_ConfigSection):
 		updateConfig(message)
@@ -169,7 +184,7 @@ def doAppLoop():
 
 	App.gSlaveClient = SlaveClient()
 	App.gSlaveClient.start(onMasterRequest)
-	App.gSlaveClient.startConfigRequestLoop(App.gGameCfgSection, onConfigReply, onConfigRequest, 10)
+	App.gSlaveClient.startConfigRequestLoop(App.gGameConfig.getName(), onConfigReply, onConfigRequest, 10)
 
 def main():
 	_, *params = sys.argv
@@ -180,13 +195,19 @@ def main():
 	if len(params) == 0:
 		exit()
 
-	CONFIG_VARIABLE = os.environ.get('GAME_WRAPPER_CONFIG_FILE')
-	if CONFIG_VARIABLE:
-		App.CONFIG_FILE_PATH = CONFIG_VARIABLE
+	SYS_VAR = os.environ.get('GAME_WRAPPER_CONFIG_FILE')
+	if SYS_VAR:
+		App.CONFIG_FILE_PATH = SYS_VAR
 
+	SYS_VAR = os.environ.get('USERNAME')
+	if SYS_VAR:
+		App.gUserName = SYS_VAR
+	
+	print(f'Current user: {App.gUserName}')
+
+	App.gGameConfigName = params[0]
 	App.gConfigFile = ConfigFile.read(App.CONFIG_FILE_PATH)
-
-	App.gGameCfgSection = params[0]
+	App.gGameConfig = CfgSectionWrapper(App.gConfigFile, App.gGameConfigName)
 
 	layout = [
 		[sg.Text(getString(Strings.STR_ENTER_PWD))], 
@@ -197,7 +218,7 @@ def main():
 	]
 
 	# Create the window
-	App.window = sg.Window(f"Game launcher 1.0 - {App.gGameCfgSection}", layout)
+	App.window = sg.Window(f"Game launcher 1.0 - {App.gGameConfig.getName()}", layout)
 
 	threading.Timer(1, doAppLoop).start()
 

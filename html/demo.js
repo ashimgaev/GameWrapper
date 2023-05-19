@@ -118,3 +118,7 @@ function updateConfigView() {
     configModel = masterService.getAllConfigs()
     configTable.buildTable(configModel, masterStatusModel)
 }
+
+function onSyncConfigClick() {
+    masterService.syncConfig()
+}
