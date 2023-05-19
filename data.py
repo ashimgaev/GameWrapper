@@ -7,10 +7,15 @@ from dataclasses import dataclass
 class MessageType(enum.Enum):
     UNKNOWN = 0
     SLAVE_REQUEST_CONFIG = 1
-    SLAVE_REPLY_CONFIG_LIST = 10
+    SLAVE_REQUEST_GAME_STARTED = 2
+    SLAVE_REQUEST_GAME_STOPPED = 3
+
+    SLAVE_REPLY_CONFIG_LIST = 20
+    SLAVE_REPLY_CONFIG_UPDATE = 21
     
     MASTER_REQUEST_CONFIG_UPDATE = 100
     MASTER_REQUEST_CONFIG_LIST = 101
+
     MASTER_REPLY_CONFIG = 200
 
 
@@ -43,11 +48,22 @@ class Data_ConfigSection():
         self.pwd = pwd
         self.remote_accepted=remote_accepted
 
+class Data_SlaveGameStartedRequest(Data_MessageRequest):
+    def __init__(self, gameName: str):
+        super().__init__(type=MessageType.SLAVE_REQUEST_GAME_STARTED, payload=gameName)
+
+class Data_SlaveGameStoppedRequest(Data_MessageRequest):
+    def __init__(self, gameName: str):
+        super().__init__(type=MessageType.SLAVE_REQUEST_GAME_STOPPED, payload=gameName)
+
 class Data_SlaveConfigListReply(Data_MessageReply):
     def __init__(self, cfg_sections: list[Data_ConfigSection]):
         super().__init__(type=MessageType.SLAVE_REPLY_CONFIG_LIST, payload="")
         self.cfg_sections = cfg_sections
 
+class Data_SlaveConfigUpdateReply(Data_MessageReply):
+    def __init__(self, status: bool):
+        super().__init__(type=MessageType.SLAVE_REPLY_CONFIG_UPDATE, payload="OK")
 
 class Data_MasterConfigReply(Data_MessageReply):
     def __init__(self, cfg_section: Data_ConfigSection = Data_ConfigSection()):

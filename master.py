@@ -23,9 +23,9 @@ class Master(MqttPoint):
         self._on_slave_request_cb = None
 
 
-    def sendConfigUpdateRequest(self, cfg_section: Data_ConfigSection):
+    def sendConfigUpdateRequest(self, cfg_section: Data_ConfigSection, on_reply_cb):
         msg = Data_MasterConfigUpdateRequest(cfg_section=cfg_section)
-        self.sendMessage(msg)
+        self.sendMessage(msg, on_reply_cb=on_reply_cb)
 
     def sendConfigListRequest(self, on_reply_cb):
         def onReply(msg):

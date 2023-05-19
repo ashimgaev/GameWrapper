@@ -50,7 +50,7 @@ class App:
 
 	gSuperUserMode = False
 
-	gSlaveClient = None
+	gSlaveClient: SlaveClient
 
 	gExit = False
 
@@ -105,6 +105,7 @@ def stopGame():
 					os.kill(int(proc_id), 9)
 				except:
 					print(f'Failed to stop PID {proc_id}')
+		App.gSlaveClient.sendGameSoppedRequest(App.gGameConfig.getName())
 	if App.gGameStarted:
 		App.gExit = True
 		App.pwdButton.click()
@@ -115,6 +116,7 @@ def startGame():
 		print('Start game!!!')
 		App.gGameStarted = True
 		os.startfile(gamePath)
+		App.gSlaveClient.sendGameStartedRequest(App.gGameConfig.getName())
 		App.gSlaveClient.setConfigLoopPeriod(60)
 
 def updateConfig(cfg_section: Data_ConfigSection):
@@ -164,6 +166,7 @@ def doAppLoop():
 	def onMasterRequest(message):
 		print(f'master request: {str(message)}')
 		if message.msg_type == MessageType.MASTER_REQUEST_CONFIG_UPDATE:
+			App.gSlaveClient.sendConfigUpdateReply(message)
 			updateConfig(message.cfg_section)
 			checkConfig(message.cfg_section)
 		elif message.msg_type == MessageType.MASTER_REQUEST_CONFIG_LIST:
@@ -223,10 +226,12 @@ def main():
 	threading.Timer(1, doAppLoop).start()
 
 	# Create an event loop
-	while True:
+	while App.gExit == False:
 		event, values = App.window.read()
 		try:
 			if App.gExit:
+				if App.gStopThread:
+					App.gStopThread.cancel()
 				break
 			# End program if user closes window or
 			# presses the OK button
@@ -241,6 +246,8 @@ def main():
 					break
 			elif event == sg.WIN_CLOSED:
 				App.gExit = True
+				if App.gStopThread:
+					App.gStopThread.cancel()
 				break
 		except:
 			pass

@@ -2,8 +2,12 @@
 function doGet(uri) {
     var req = new XMLHttpRequest();
     req.open("GET", uri, false);
-    req.send();
-    return JSON.parse(req.responseText);
+    try {
+        req.send();
+        return JSON.parse(req.responseText);
+    } catch (err) {
+        throw new Error();
+    }
 }
 
 function doPost(uri, jData) {
@@ -22,6 +26,15 @@ class MasterService {
         this.configUrl = this.address + "config";
         this.configSyncUrl = this.address + "config/sync";
         this.statusUrl = this.address + "status";
+        this.logsUrl = this.address + "logs";
+    }
+
+    getLogs() {
+        try {
+            return doGet(this.logsUrl);
+        } catch (err) {
+            throw new Error();
+        }
     }
 
     setMasterStatus(is_active) {

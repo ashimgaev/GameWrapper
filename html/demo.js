@@ -7,6 +7,11 @@ var configTable;
 var masterService;
 var configModel;
 var masterStatusModel;
+var healthStatusDivElement;
+var healthStatuslabelElement;
+var loggerElement;
+
+var HealthStatus;
 
 
 function StartMain() {
@@ -17,10 +22,52 @@ function StartMain() {
     masterService = new MasterService(MASTER_SERVICE_HOST)
 
     mastertStatusElement = document.getElementById("MasterStatusId");
+    healthStatusDivElement = document.getElementById("HealthStatusDivId");
+    healthStatuslabelElement = document.getElementById("HealthStatusLabelId");
+    loggerElement = document.getElementById("LoggerInputId");
 
     configTable = new ConfigTable()
 
     updateConfigView()
+
+    startPingTimer()
+}
+
+function startPingTimer() {
+    setTimeout(
+        () => {
+            try {
+                logsModel = masterService.getLogs();
+                if (HealthStatus == false) {
+                    healthStatusDivElement.className = "StatusDivGood";
+                    healthStatuslabelElement.innerHTML = "Good!"
+                    HealthStatus = true
+                    startReloadPageTimer(500)
+                }
+                // Update logger
+                var str = "";
+                for (var i = 0; i < logsModel.logs.length; i++) {
+                    str = str + logsModel.logs[i] + "\n";
+                }
+                loggerElement.value = str;
+            } catch (err) {
+                healthStatusDivElement.className = "StatusDivBad";
+                healthStatuslabelElement.innerHTML = "Bad!"
+                HealthStatus = false
+            }
+            startPingTimer()
+        },
+        1 * 1000
+    );
+}
+
+function startReloadPageTimer(ms) {
+    setTimeout(
+        () => {
+            updateConfigView()
+        },
+        ms
+    );
 }
 
 function storeMasterAddressInCookies() {
@@ -121,4 +168,5 @@ function updateConfigView() {
 
 function onSyncConfigClick() {
     masterService.syncConfig()
+    startReloadPageTimer(2000)
 }

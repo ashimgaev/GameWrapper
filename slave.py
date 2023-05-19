@@ -57,6 +57,17 @@ class SlaveClient(MqttPoint):
         msg.uuid = reqMessage.uuid
         self.sendMessage(msg)
 
+    def sendConfigUpdateReply(self, reqMessage: Data_MessageBase):
+        msg = Data_SlaveConfigUpdateReply(status=True)
+        msg.uuid = reqMessage.uuid
+        self.sendMessage(msg)
+
+    def sendGameStartedRequest(self, gameName: str):
+        self.sendMessage(Data_SlaveGameStartedRequest(gameName=gameName))
+
+    def sendGameSoppedRequest(self, gameName: str):
+        self.sendMessage(Data_SlaveGameStoppedRequest(gameName=gameName))
+
 def main():
 
     slaveClient = SlaveClient()

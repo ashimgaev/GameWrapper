@@ -16,10 +16,14 @@ class MqttPoint:
                 if self_inst.on_request_cb:
                     self_inst.on_request_cb(message)
             else:
-                last_msg, on_reply_cb = self_inst.last_message
-                if message.uuid == last_msg.uuid:
-                    if on_reply_cb:
-                        on_reply_cb(message)
+                on_reply_cb = None
+                for _, msgPair in self_inst.last_message_map.items():
+                    last_msg, cb = msgPair
+                    if message.uuid == last_msg.uuid:
+                        on_reply_cb = cb
+                        break
+                if on_reply_cb:
+                    on_reply_cb(message)
         return on_message
 
     def __init__(self, name: str, listen_channel: str, request_channel: str, on_request_cb):
@@ -30,7 +34,7 @@ class MqttPoint:
 
         self.on_request_cb = on_request_cb
 
-        self.last_message = (None, None)
+        self.last_message_map = {}
         
         self.req_client = paho.Client()
         self.req_client.on_publish = None
@@ -44,7 +48,7 @@ class MqttPoint:
         self.master_listener.connect("broker.hivemq.com", 1883, 60)
 
     def sendMessage(self, msg: Data_MessageBase, on_reply_cb = None):
-        self.last_message = (msg, on_reply_cb)
+        self.last_message_map[msg.msg_type] = (msg, on_reply_cb)
         print(f'{self.name} sending request: {str(msg)}')
         mqtt_msg = pickle.dumps(msg)
         self.req_client.publish(self.request_channel, mqtt_msg, qos=1)

@@ -8,6 +8,17 @@
 
 </head>
 
+<style>
+	.StatusDivGood {
+		background-color: green;
+		width:150px;
+	}
+	.StatusDivBad {
+		background-color: RED;
+		width:150px;
+	}
+</style>
+
 <body onLoad="StartMain()">
 
 	<div>
@@ -17,11 +28,21 @@
 	</div>
 	<p></p>
 
-	<fieldset>
+	<div id="HealthStatusDivId" class="StatusDivGood">
+		<label id="HealthStatusLabelId">Good</label>
+	</div>
+	<p></p>
+
+	<fieldset style="text-align:left;width:300px">
 		<legend>Master status:</legend>
 		<div>
 			<input id="MasterStatusId" type="checkbox" onclick="onMasterStatusClick()">
 			<label for="MasterStatusId">is active</label>
+			
+		</div>
+		<p>Logs</p>
+		<div>
+			<textarea id="LoggerInputId" style="text-align:left;width:500px;height:100px"></textarea>
 		</div>
 	</fieldset>
 	<p></p>

@@ -7,6 +7,7 @@ import json
 import sys
 from pydantic import BaseModel
 from master import Master
+from datetime import datetime
 from config_file import ConfigFile, ConfigSchema, CfgSectionWrapper, makeNewSection
 
 serverArgParser = argparse.ArgumentParser(description='SBC Rest API Server',
@@ -27,6 +28,21 @@ serverArgParser.add_argument('-c', '--config',
 
 
 
+class MasterLogger:
+    def __init__(self, maxSize: int):
+        self._maxSize = maxSize
+        self._logs = list[str]()
+
+    def push(self, msg: str):
+        now = datetime.now()
+        current_time = now.strftime("%H:%M:%S")
+        self._logs.append(f'[{current_time}]: {msg}')
+        if len(self._logs) > self._maxSize:
+            self._logs.pop(0)
+
+    def getLogs(self) -> list[str]:
+        return self._logs
+
 class MasterServer:
     def __init__(self):
         _, *params = sys.argv
@@ -34,6 +50,7 @@ class MasterServer:
         self.configFile = ConfigFile.read(args.config)
         self.masterClient = Master()
         self.is_active = False
+        self._logger = MasterLogger(5)
 
     def isActive(self):
         return self.is_active
@@ -41,13 +58,19 @@ class MasterServer:
     def start(self):
         print("Server started")
         def on_slave_message(msg):
-            if self.is_active == True:
-                if msg.msg_type == MessageType.SLAVE_REQUEST_CONFIG:
+            if msg.msg_type == MessageType.SLAVE_REQUEST_CONFIG:
+                self._logger.push(f'Slave config request: [{msg.msg_payload}]')
+                if self.is_active == True:
                     cfg = CfgSectionWrapper(self.configFile, msg.msg_payload)
                     out = Data_ConfigSection(name=cfg.getName(), 
                                             pwd=cfg.getPassword(),
                                             remote_accepted=cfg.getAllowed())
+                    self._logger.push(f'Reply to config: [{msg.msg_payload}] with {str(cfg.getAllowed())}')
                     self.masterClient.sendConfigRequestReply(reqMessage=msg, cfg_section=out)
+            if msg.msg_type == MessageType.SLAVE_REQUEST_GAME_STARTED:
+                self._logger.push(f'Slave game started: [{msg.msg_payload}]')
+            if msg.msg_type == MessageType.SLAVE_REQUEST_GAME_STOPPED:
+                self._logger.push(f'Slave game stopped: [{msg.msg_payload}]')
         self.masterClient.start(on_slave_message)
 
     def stop(self):
@@ -90,6 +113,9 @@ class ConfigResponse(BaseModel):
 class MasterStatusResponse(BaseModel):
     is_active: bool
 
+class MasterLogsResponse(BaseModel):
+    logs: list[str]
+
 class MasterStatusRequest(BaseModel):
     is_active: bool
 
@@ -116,6 +142,10 @@ def get_demo(resource: str):
     with open(f'./html/{resource}', 'r') as resFile:
         out = resFile.read()
     return HTMLResponse(content=out, status_code=200)
+
+@masterapi.get("/master/logs", response_model=MasterLogsResponse)
+def master_get_logs():
+    return MasterLogsResponse(logs=MasterApp.server._logger.getLogs())
 
 @masterapi.get("/master/status", response_model=MasterStatusResponse)
 def master_get_status():
@@ -144,13 +174,15 @@ def get_config():
 @masterapi.get("/master/config/sync", response_model=BaseResponse)
 def sync_config():
     def onReply(msg):
-        if msg.msg_type == MessageType.SLAVE_REPLY_CONFIG_LIST and msg.cfg_sections and len(msg.cfg_sections) > 0:
-            MasterApp.server.configFile.clear()
-            for s in msg.cfg_sections:
-                cfg = makeNewSection(MasterApp.server.configFile, s.name)
-                cfg.setPassword(s.pwd)
-            MasterApp.server.configFile.write()
-
+        if msg.msg_type == MessageType.SLAVE_REPLY_CONFIG_LIST:
+            MasterApp.server._logger.push(f'Slave sync config reply: {len(msg.cfg_sections)} items')
+            if msg.cfg_sections and len(msg.cfg_sections) > 0:
+                MasterApp.server.configFile.clear()
+                for s in msg.cfg_sections:
+                    cfg = makeNewSection(MasterApp.server.configFile, s.name)
+                    cfg.setPassword(s.pwd)
+                MasterApp.server.configFile.write()
+    MasterApp.server._logger.push(f'Master sync config request')
     MasterApp.server.masterClient.sendConfigListRequest(on_reply_cb=onReply)
     return BaseResponse(status='OK')
 
@@ -159,16 +191,20 @@ def set_config(reqBody: ConfigRequest):
     needUpdate = False
     cfgFile = MasterApp.server.configFile
     for newCfg in reqBody.sections:
-        currCfg = CfgSectionWrapper(cfgFile, newCfg.name)
-        if currCfg.getPassword() != newCfg.pwd:
-            currCfg.setPassword(val=newCfg.pwd)
+        cfg = CfgSectionWrapper(cfgFile, newCfg.name)
+        if cfg.getPassword() != newCfg.pwd:
+            cfg.setPassword(val=newCfg.pwd)
             needUpdate = True
-        currCfg.setAllowed(val=newCfg.allowed)
+        cfg.setAllowed(val=newCfg.allowed)
         # Notify slave
-        msgCfg = Data_ConfigSection(name=currCfg.getName(), 
-                                pwd=currCfg.getPassword(),
-                                remote_accepted=currCfg.getAllowed())
-        MasterApp.server.masterClient.sendConfigUpdateRequest(msgCfg)
+        msgCfg = Data_ConfigSection(name=cfg.getName(), 
+                                pwd=cfg.getPassword(),
+                                remote_accepted=cfg.getAllowed())
+        def on_reply(msg):
+            MasterApp.server._logger.push(f'Slave config ACK reply for [{cfg.getName()}]')
+
+        MasterApp.server._logger.push(f'Master send config update request [{cfg.getName()}]')
+        MasterApp.server.masterClient.sendConfigUpdateRequest(msgCfg, on_reply)
     
     if needUpdate:
         cfgFile.write()
