@@ -24,6 +24,9 @@ class MqttPoint:
                         break
                 if on_reply_cb:
                     on_reply_cb(message)
+                else:
+                    if self_inst.on_request_cb:
+                        self_inst.on_request_cb(message)
         return on_message
 
     def __init__(self, name: str, listen_channel: str, request_channel: str, on_request_cb):

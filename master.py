@@ -2,6 +2,7 @@ import paho.mqtt.client as paho
 from mqtt_point import *
 from data import *
 import time, threading
+import uuid
 
 class Master(MqttPoint):
     def makeOnMessageReplyCallback(self_inst):
@@ -20,8 +21,11 @@ class Master(MqttPoint):
                          listen_channel="com.ashimgaev.home/channel/slave_dbg", 
                          request_channel="com.ashimgaev.home/channel/master_dbg",
                          on_request_cb=Master.makeOnSlaveRequestCallback(self))
+        self._name = str(uuid.uuid4())
         self._on_slave_request_cb = None
 
+    def getName(self):
+        return self._name
 
     def sendConfigUpdateRequest(self, cfg_section: Data_ConfigSection, on_reply_cb):
         msg = Data_MasterConfigUpdateRequest(cfg_section=cfg_section)
@@ -33,9 +37,23 @@ class Master(MqttPoint):
                 on_reply_cb(msg)
         self.sendMessage(Data_MasterConfigListRequest(), onReply)
 
+    def sendStatisticRequest(self, on_reply_cb):
+        def onReply(msg):
+            if on_reply_cb:
+                on_reply_cb(msg)
+        self.sendMessage(Data_MasterStatisticRequest(), onReply)
+
+    def sendMasterRoleRequest(self):
+        msg = Data_MasterMasterRoleRequest(name=self._name)
+        self.sendMessage(msg)
+
     def sendConfigRequestReply(self, reqMessage: Data_MessageBase, cfg_section: Data_ConfigSection):
         msg = Data_MasterConfigReply(cfg_section=cfg_section)
         msg.uuid = reqMessage.uuid
+        self.sendMessage(msg)
+
+    def sendMasterRoleRequestReply(self, reqMessage: Data_MessageBase):
+        msg = Data_MasterMasterRoleReply(name=self.getName())
         self.sendMessage(msg)
 
     def start(self, on_config_request_cb):

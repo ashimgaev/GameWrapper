@@ -27,6 +27,8 @@ class MasterService {
         this.configSyncUrl = this.address + "config/sync";
         this.statusUrl = this.address + "status";
         this.logsUrl = this.address + "logs";
+        this.statisticUrl = this.address + "statistic";
+        this.masterRoleUrl = this.address + "master-role";
     }
 
     getLogs() {
@@ -35,6 +37,14 @@ class MasterService {
         } catch (err) {
             throw new Error();
         }
+    }
+
+    getStatistic() {
+        return doGet(this.statisticUrl);
+    }
+
+    getMasterRole() {
+        return doGet(this.masterRoleUrl);
     }
 
     setMasterStatus(is_active) {

@@ -34,20 +34,25 @@
 	<p></p>
 
 	<fieldset style="text-align:left;width:300px">
-		<legend>Master status:</legend>
+		<legend id="MasterStatusLegendId">Master status:</legend>
 		<div>
 			<input id="MasterStatusId" type="checkbox" onclick="onMasterStatusClick()">
 			<label for="MasterStatusId">is active</label>
-			
 		</div>
+		<button onClick="onSyncConfigClick()">Sync Config</button>
+		<p></p>
+		
+		<button onClick="onGetStatisticClick()">Get Statistic</button>
+		<p></p>
+
+		<button onClick="onGetMasterRoleClick()">Master Role Request</button>
+		<p></p>
+
 		<p>Logs</p>
 		<div>
 			<textarea id="LoggerInputId" style="text-align:left;width:500px;height:100px"></textarea>
 		</div>
 	</fieldset>
-	<p></p>
-
-	<button onClick="onSyncConfigClick()">Sync Config</button>
 	<p></p>
 
 	<div id="ConfigTableId" border="1" style="width:350px; height:35px"></div>

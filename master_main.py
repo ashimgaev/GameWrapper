@@ -71,6 +71,11 @@ class MasterServer:
                 self._logger.push(f'Slave game started: [{msg.msg_payload}]')
             if msg.msg_type == MessageType.SLAVE_REQUEST_GAME_STOPPED:
                 self._logger.push(f'Slave game stopped: [{msg.msg_payload}]')
+            if msg.msg_type == MessageType.SLAVE_REQUEST_MASTER_ROLE:
+                if self.masterClient.getName() != msg.msg_payload:
+                    self.masterClient.sendMasterRoleRequestReply(reqMessage=msg)
+            if msg.msg_type == MessageType.SLAVE_REPLY_MASTER_ROLE:
+                self._logger.push(f'Master role ACK reply from: {msg.msg_payload}')
         self.masterClient.start(on_slave_message)
 
     def stop(self):
@@ -112,6 +117,7 @@ class ConfigResponse(BaseModel):
 
 class MasterStatusResponse(BaseModel):
     is_active: bool
+    name: str
 
 class MasterLogsResponse(BaseModel):
     logs: list[str]
@@ -147,9 +153,24 @@ def get_demo(resource: str):
 def master_get_logs():
     return MasterLogsResponse(logs=MasterApp.server._logger.getLogs())
 
+@masterapi.get("/master/statistic", response_model=BaseResponse)
+def master_get_statistic():
+    def onReply(msg):
+        if msg.msg_type == MessageType.SLAVE_REPLY_STATISTIC:
+            MasterApp.server._logger.push(f'Slave statistic reply: {msg.games}')
+    MasterApp.server._logger.push(f'Master statistic request')
+    MasterApp.server.masterClient.sendStatisticRequest(onReply)
+    return BaseResponse(status='OK')
+
+@masterapi.get("/master/master-role", response_model=BaseResponse)
+def master_get_master_role():
+    MasterApp.server._logger.push(f'Master request: MASTER ROLE')
+    MasterApp.server.masterClient.sendMasterRoleRequest()
+    return BaseResponse(status='OK')
+
 @masterapi.get("/master/status", response_model=MasterStatusResponse)
 def master_get_status():
-    return MasterStatusResponse(is_active=MasterApp.server.isActive())
+    return MasterStatusResponse(is_active=MasterApp.server.isActive(), name=MasterApp.server.masterClient.getName())
 
 @masterapi.post("/master/status", response_model=MasterStatusResponse)
 def master_set_status(reqBody: MasterStatusRequest):

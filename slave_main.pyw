@@ -83,13 +83,24 @@ def setStatus(msg: str):
 	except:
 		pass
 
-def onSuperUserMode():
-	App.gSuperUserMode = True
-	App.gSlaveClient.stop()
-
 def onGameTimeout():
 	print('GAME timeout!!!')
 	stopGame()
+
+def getStatistic():
+	out = []
+	try:
+		for cfgName in App.gConfigFile.getSections():
+			cfg = CfgSectionWrapper(App.gConfigFile, cfgName)
+			with subprocess.Popen(f'tasklist /fi "USERNAME eq {App.gUserName}" /fi "IMAGENAME eq {cfg.getExecProcName()}"', stdout=subprocess.PIPE, shell=True, text=True, encoding='UTF-8') as proc:
+				str, _ = proc.communicate()
+				for line in str.splitlines():
+					if cfg.getExecProcName() in line:
+						out.append(cfg.getExecProcName())
+						break
+	except:
+		out.append('system error')
+	return out
 
 def stopGame():
 	setStatus(getString(Strings.STR_BLOCKED))
@@ -146,18 +157,21 @@ def checkPassword(input_pwd: str):
 		return (config_pwd == input_pwd, False)
 	return (False, False)
 
-def launchGame(pwd: str):
+def launchGameFromPassword(pwd: str):
 	goodPwdFlag, superUserFlag = checkPassword(pwd)
 	
 	if superUserFlag:
-		onSuperUserMode()
+		App.gSuperUserMode = True
+
+	if goodPwdFlag:
+		App.gSlaveClient.stopConfigRequestLoop()
 	
 	if goodPwdFlag or superUserFlag:
-		App.gSlaveClient.stop()
 		startGame()
 		timeLimit = App.timeInput.get()
-		if len(timeLimit) > 0:
-			startStopTimer(int(timeLimit)*60)
+		if len(timeLimit) == 0:
+			timeLimit = '30'
+		startStopTimer(int(timeLimit)*60)
 	else:
 		setStatus(getString(Strings.STR_WRONG_PASSWORD))
 		print('Wrong password!!!')
@@ -177,6 +191,13 @@ def doAppLoop():
 				  remote_accepted=False,
 				  pwd=cfg.getPassword()))
 			App.gSlaveClient.sendConfigListReply(message, out)
+		elif message.msg_type == MessageType.MASTER_REQUEST_STATISTIC:
+			out = getStatistic()
+			App.gSlaveClient.sendStatisticReply(message, out)
+		elif message.msg_type == MessageType.MASTER_REQUEST_MASTER_ROLE:
+			App.gSlaveClient.sendMasterRoleRequest(name=message.msg_payload)
+		elif message.msg_type == MessageType.MASTER_REPLY_MASTER_ROLE:
+			App.gSlaveClient.sendMasterRoleReply(name=message.msg_payload)
 
 	def onConfigReply(message: Data_ConfigSection):
 		updateConfig(message)
@@ -241,7 +262,7 @@ def main():
 				App.gTimeLimit = 0
 				if len(timelimit):
 					App.gTimeLimit = int(timelimit)
-				launchGame(pwd)
+				launchGameFromPassword(pwd)
 				if App.gExit:
 					break
 			elif event == sg.WIN_CLOSED:

@@ -153,6 +153,7 @@ function ConfigTable() {
             this.table.appendChild(groupElement)
         }
         mastertStatusElement.checked = masterStatus.is_active
+        document.getElementById("MasterStatusLegendId").innerHTML = "Master status: " + masterStatus.name
     }
 
     this.clear = function () {
@@ -169,4 +170,12 @@ function updateConfigView() {
 function onSyncConfigClick() {
     masterService.syncConfig()
     startReloadPageTimer(2000)
+}
+
+function onGetStatisticClick() {
+    masterService.getStatistic()
+}
+
+function onGetMasterRoleClick() {
+    masterService.getMasterRole()
 }
