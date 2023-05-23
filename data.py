@@ -7,9 +7,8 @@ from dataclasses import dataclass
 class MessageType(enum.Enum):
     UNKNOWN = 0
     SLAVE_REQUEST_CONFIG = 1
-    SLAVE_REQUEST_GAME_STARTED = 2
-    SLAVE_REQUEST_GAME_STOPPED = 3
-    SLAVE_REQUEST_MASTER_ROLE = 4
+    SLAVE_REQUEST_MASTER_ROLE = 2
+    SLAVE_REQUEST_LOG_MESSAGE = 3
 
     SLAVE_REPLY_CONFIG_LIST = 20
     SLAVE_REPLY_CONFIG_UPDATE = 21
@@ -19,7 +18,9 @@ class MessageType(enum.Enum):
     MASTER_REQUEST_CONFIG_UPDATE = 100
     MASTER_REQUEST_CONFIG_LIST = 101
     MASTER_REQUEST_STATISTIC = 102,
-    MASTER_REQUEST_MASTER_ROLE = 103
+    MASTER_REQUEST_MASTER_ROLE = 103,
+    MASTER_REQUEST_SHOW_MESSAGE = 104,
+    MASTER_REQUEST_SLAVE_SHUTDOWN = 105
 
     MASTER_REPLY_CONFIG = 200
     MASTER_REPLY_MASTER_ROLE = 201
@@ -30,8 +31,9 @@ class Data_MessageBase:
         self.on_reply_cb = on_reply_cb
         self.msg_type = type
         self.msg_payload = payload
-        self.uuid = uuid.uuid4()
+        self.uuid = str(uuid.uuid4())
         self.is_request = is_request
+        self.slave_name = 'empty'
 
     def __str__(self) -> str:
         return f"type={self.msg_type}, payload={self.msg_payload}, uuid={self.uuid}"
@@ -57,13 +59,9 @@ class Data_SlaveConfigRequest(Data_MessageRequest):
     def __init__(self, section_name: str = ''):
         super().__init__(type=MessageType.SLAVE_REQUEST_CONFIG, payload=section_name)
 
-class Data_SlaveGameStartedRequest(Data_MessageRequest):
-    def __init__(self, gameName: str):
-        super().__init__(type=MessageType.SLAVE_REQUEST_GAME_STARTED, payload=gameName)
-
-class Data_SlaveGameStoppedRequest(Data_MessageRequest):
-    def __init__(self, gameName: str):
-        super().__init__(type=MessageType.SLAVE_REQUEST_GAME_STOPPED, payload=gameName)
+class Data_SlaveLogMessageRequest(Data_MessageRequest):
+    def __init__(self, msg: str):
+        super().__init__(type=MessageType.SLAVE_REQUEST_LOG_MESSAGE, payload=msg)
 
 class Data_SlaveMasterRoleRequest(Data_MessageRequest):
     def __init__(self, name: str):
@@ -99,6 +97,14 @@ class Data_MasterConfigUpdateRequest(Data_MessageRequest):
 class Data_MasterConfigListRequest(Data_MessageRequest):
     def __init__(self):
         super().__init__(type=MessageType.MASTER_REQUEST_CONFIG_LIST)
+
+class Data_MasterShowMessageRequest(Data_MessageRequest):
+    def __init__(self, msg: str):
+        super().__init__(type=MessageType.MASTER_REQUEST_SHOW_MESSAGE, payload=msg)
+
+class Data_MasterShutdownSlaveRequest(Data_MessageRequest):
+    def __init__(self, name: str):
+        super().__init__(type=MessageType.MASTER_REQUEST_SLAVE_SHUTDOWN, payload=name)
 
 class Data_MasterStatisticRequest(Data_MessageRequest):
     def __init__(self):

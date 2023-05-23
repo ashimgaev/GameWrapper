@@ -11,13 +11,19 @@ class SlaveClient(MqttPoint):
         return cb_func
     
     def __init__(self):
-        super().__init__(name="Slave", 
+        self._uuid = str(uuid.uuid4())
+        id = self._uuid[:4] + '-' + self._uuid[-4:]
+        slave_name = f'Slave[{id}]'
+        super().__init__(name=slave_name, 
                          listen_channel="com.ashimgaev.home/channel/master_dbg", 
                          request_channel="com.ashimgaev.home/channel/slave_dbg", 
                          on_request_cb=SlaveClient.makeOnRequestCallback(self))
         self.on_request_cb = None
         self.config_request_loop = (False,  threading.Timer)
         self.config_request_loop_period = 10
+
+    def getName(self):
+        return super().getMyName()
     
     def setConfigLoopPeriod(self, val: int):
         self.config_request_loop_period = val
@@ -67,11 +73,8 @@ class SlaveClient(MqttPoint):
         msg.uuid = reqMessage.uuid
         self.sendMessage(msg)
 
-    def sendGameStartedRequest(self, gameName: str):
-        self.sendMessage(Data_SlaveGameStartedRequest(gameName=gameName))
-
-    def sendGameSoppedRequest(self, gameName: str):
-        self.sendMessage(Data_SlaveGameStoppedRequest(gameName=gameName))
+    def sendLogMessageRequest(self, msg: str):
+        self.sendMessage(Data_SlaveLogMessageRequest(msg=msg))
     
     def sendMasterRoleRequest(self, name: str):
         self.sendMessage(Data_SlaveMasterRoleRequest(name=name))

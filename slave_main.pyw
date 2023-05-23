@@ -116,18 +116,18 @@ def stopGame():
 					os.kill(int(proc_id), 9)
 				except:
 					print(f'Failed to stop PID {proc_id}')
-		App.gSlaveClient.sendGameSoppedRequest(App.gGameConfig.getName())
+		App.gSlaveClient.sendLogMessageRequest(f'game stopped [{App.gGameConfig.getName()}]')
 	if App.gGameStarted:
 		App.gExit = True
 		App.pwdButton.click()
 
-def startGame():
+def startGame(byPassword: bool):
 	gamePath = App.gGameConfig.getExecPath()
 	if gamePath and App.gGameStarted == False:
 		print('Start game!!!')
 		App.gGameStarted = True
 		os.startfile(gamePath)
-		App.gSlaveClient.sendGameStartedRequest(App.gGameConfig.getName())
+		App.gSlaveClient.sendLogMessageRequest(f'game started [{App.gGameConfig.getName()}], by password: {str(byPassword)}')
 		App.gSlaveClient.setConfigLoopPeriod(60)
 
 def updateConfig(cfg_section: Data_ConfigSection):
@@ -141,7 +141,7 @@ def checkConfig(cfg_section: Data_ConfigSection):
 		if cfg_section.remote_accepted == False:
 			stopGame()
 		else:
-			startGame()
+			startGame(False)
 
 def startStopTimer(timeoutSec: int):
 	print(f'Start GAME timeout {timeoutSec} sec!!!')
@@ -167,7 +167,7 @@ def launchGameFromPassword(pwd: str):
 		App.gSlaveClient.stopConfigRequestLoop()
 	
 	if goodPwdFlag or superUserFlag:
-		startGame()
+		startGame(True)
 		timeLimit = App.timeInput.get()
 		if len(timeLimit) == 0:
 			timeLimit = '30'
@@ -194,10 +194,12 @@ def doAppLoop():
 		elif message.msg_type == MessageType.MASTER_REQUEST_STATISTIC:
 			out = getStatistic()
 			App.gSlaveClient.sendStatisticReply(message, out)
-		elif message.msg_type == MessageType.MASTER_REQUEST_MASTER_ROLE:
-			App.gSlaveClient.sendMasterRoleRequest(name=message.msg_payload)
-		elif message.msg_type == MessageType.MASTER_REPLY_MASTER_ROLE:
-			App.gSlaveClient.sendMasterRoleReply(name=message.msg_payload)
+		elif message.msg_type == MessageType.MASTER_REQUEST_SHOW_MESSAGE:
+			setStatus(message.msg_payload)
+		elif message.msg_type == MessageType.MASTER_REQUEST_SLAVE_SHUTDOWN:
+			if message.msg_payload in App.gSlaveClient.getName():
+				App.gExit = True
+				App.pwdButton.click()
 
 	def onConfigReply(message: Data_ConfigSection):
 		updateConfig(message)
@@ -273,6 +275,7 @@ def main():
 		except:
 			pass
 
+	App.gSlaveClient.sendLogMessageRequest(f'Slave shutdown')
 	App.gSlaveClient.stop()
 	App.window.close()
 

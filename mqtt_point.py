@@ -50,11 +50,21 @@ class MqttPoint:
         self.master_listener.on_pre_connect = None
         self.master_listener.connect("broker.hivemq.com", 1883, 60)
 
+    def getMyName(self):
+        return self.name
+
     def sendMessage(self, msg: Data_MessageBase, on_reply_cb = None):
+        msg.slave_name = self.name
         self.last_message_map[msg.msg_type] = (msg, on_reply_cb)
         print(f'{self.name} sending request: {str(msg)}')
         mqtt_msg = pickle.dumps(msg)
         self.req_client.publish(self.request_channel, mqtt_msg, qos=1)
+
+    def sendMessageToListenerChannel(self, msg: Data_MessageBase):
+        msg.slave_name = self.name
+        print(f'{self.name} sending request to listener channel: {str(msg)}')
+        mqtt_msg = pickle.dumps(msg)
+        self.master_listener.publish(self.listen_channel, mqtt_msg, qos=1)
 
     def start(self):
         self.master_listener.loop_start()

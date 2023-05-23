@@ -29,6 +29,8 @@ class MasterService {
         this.logsUrl = this.address + "logs";
         this.statisticUrl = this.address + "statistic";
         this.masterRoleUrl = this.address + "master-role";
+        this.sendMessageUrl = this.address + "send-message";
+        this.slaveShutDownUrl = this.address + "slave-shutdown";
     }
 
     getLogs() {
@@ -37,6 +39,14 @@ class MasterService {
         } catch (err) {
             throw new Error();
         }
+    }
+
+    sendMessage(msg) {
+        return doGet(this.sendMessageUrl + "?msg=" + msg);
+    }
+
+    sendSlaveShutdown(name) {
+        return doGet(this.slaveShutDownUrl + "?name=" + name);
     }
 
     getStatistic() {

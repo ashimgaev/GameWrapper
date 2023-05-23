@@ -127,7 +127,7 @@ function ConfigTable() {
             el.checked = cfgSection.allowed
             allowedInputElement = el
             el.onclick = function () {
-                masterService.updateConfigs([{ 'name': sectionName, 'pwd': pwdInputElement.value, 'allowed': allowedInputElement.checked }])
+                //masterService.updateConfigs([{ 'name': sectionName, 'pwd': pwdInputElement.value, 'allowed': allowedInputElement.checked }])
             }
             groupElement.appendChild(el)
         }
@@ -178,4 +178,14 @@ function onGetStatisticClick() {
 
 function onGetMasterRoleClick() {
     masterService.getMasterRole()
+}
+
+function onSendMessageClick() {
+    msg = document.getElementById("SendMesageInputIdId")
+    masterService.sendMessage(msg.value)
+}
+
+function onSendSlaveShutdownClick() {
+    msg = document.getElementById("SendSlaveShutdownInputIdId")
+    masterService.sendSlaveShutdown(msg.value)
 }

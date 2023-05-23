@@ -50,32 +50,36 @@ class MasterServer:
         self.configFile = ConfigFile.read(args.config)
         self.masterClient = Master()
         self.is_active = False
-        self._logger = MasterLogger(5)
+        self._logger = MasterLogger(7)
 
     def isActive(self):
         return self.is_active
+    
+    def pushSlaveLog(self, mqtt, msg: str):
+        self._logger.push(f'{mqtt.slave_name}: {msg}')
 
     def start(self):
         print("Server started")
         def on_slave_message(msg):
             if msg.msg_type == MessageType.SLAVE_REQUEST_CONFIG:
-                self._logger.push(f'Slave config request: [{msg.msg_payload}]')
+                self.pushSlaveLog(msg, f'config request for [{msg.msg_payload}]')
                 if self.is_active == True:
                     cfg = CfgSectionWrapper(self.configFile, msg.msg_payload)
                     out = Data_ConfigSection(name=cfg.getName(), 
                                             pwd=cfg.getPassword(),
                                             remote_accepted=cfg.getAllowed())
-                    self._logger.push(f'Reply to config: [{msg.msg_payload}] with {str(cfg.getAllowed())}')
+                    self.pushSlaveLog(msg, f'reply to config [{msg.msg_payload}] with {str(cfg.getAllowed())}')
                     self.masterClient.sendConfigRequestReply(reqMessage=msg, cfg_section=out)
-            if msg.msg_type == MessageType.SLAVE_REQUEST_GAME_STARTED:
-                self._logger.push(f'Slave game started: [{msg.msg_payload}]')
-            if msg.msg_type == MessageType.SLAVE_REQUEST_GAME_STOPPED:
-                self._logger.push(f'Slave game stopped: [{msg.msg_payload}]')
-            if msg.msg_type == MessageType.SLAVE_REQUEST_MASTER_ROLE:
+            elif msg.msg_type == MessageType.SLAVE_REQUEST_LOG_MESSAGE:
+                self.pushSlaveLog(msg, f'log-> {msg.msg_payload}')
+            
+            # Special case for master requests
+            elif msg.msg_type == MessageType.MASTER_REPLY_MASTER_ROLE:
+                self.pushSlaveLog(msg, f' master role ACK reply')
+            elif msg.msg_type == MessageType.MASTER_REQUEST_MASTER_ROLE:
                 if self.masterClient.getName() != msg.msg_payload:
                     self.masterClient.sendMasterRoleRequestReply(reqMessage=msg)
-            if msg.msg_type == MessageType.SLAVE_REPLY_MASTER_ROLE:
-                self._logger.push(f'Master role ACK reply from: {msg.msg_payload}')
+                    self.masterClient.stop()
         self.masterClient.start(on_slave_message)
 
     def stop(self):
@@ -149,6 +153,16 @@ def get_demo(resource: str):
         out = resFile.read()
     return HTMLResponse(content=out, status_code=200)
 
+@masterapi.get("/master/send-message", response_model=BaseResponse)
+def master_send_message(msg: str):
+    MasterApp.server.masterClient.sendShowMessageRequest(msg=msg)
+    return BaseResponse(status='OK')
+
+@masterapi.get("/master/slave-shutdown", response_model=BaseResponse)
+def master_send_slave_shutdown(name: str):
+    MasterApp.server.masterClient.sendSlaveShutdownRequest(name=name)
+    return BaseResponse(status='OK')
+
 @masterapi.get("/master/logs", response_model=MasterLogsResponse)
 def master_get_logs():
     return MasterLogsResponse(logs=MasterApp.server._logger.getLogs())
@@ -157,7 +171,7 @@ def master_get_logs():
 def master_get_statistic():
     def onReply(msg):
         if msg.msg_type == MessageType.SLAVE_REPLY_STATISTIC:
-            MasterApp.server._logger.push(f'Slave statistic reply: {msg.games}')
+            MasterApp.server.pushSlaveLog(msg, f'statistic reply-> {msg.games}')
     MasterApp.server._logger.push(f'Master statistic request')
     MasterApp.server.masterClient.sendStatisticRequest(onReply)
     return BaseResponse(status='OK')
@@ -196,7 +210,7 @@ def get_config():
 def sync_config():
     def onReply(msg):
         if msg.msg_type == MessageType.SLAVE_REPLY_CONFIG_LIST:
-            MasterApp.server._logger.push(f'Slave sync config reply: {len(msg.cfg_sections)} items')
+            MasterApp.server.pushSlaveLog(msg, f'sync config reply with {len(msg.cfg_sections)} items')
             if msg.cfg_sections and len(msg.cfg_sections) > 0:
                 MasterApp.server.configFile.clear()
                 for s in msg.cfg_sections:
@@ -222,7 +236,7 @@ def set_config(reqBody: ConfigRequest):
                                 pwd=cfg.getPassword(),
                                 remote_accepted=cfg.getAllowed())
         def on_reply(msg):
-            MasterApp.server._logger.push(f'Slave config ACK reply for [{cfg.getName()}]')
+            MasterApp.server.pushSlaveLog(msg, f'config ACK reply for [{cfg.getName()}]')
 
         MasterApp.server._logger.push(f'Master send config update request [{cfg.getName()}]')
         MasterApp.server.masterClient.sendConfigUpdateRequest(msgCfg, on_reply)
@@ -241,6 +255,7 @@ def main():
     print("serving at port", args.port)
     import uvicorn  
     uvicorn.run('master_main:MASTER_APP', host="127.0.0.1", port=args.port)
+    
 
 if __name__ == "__main__": 
     main()

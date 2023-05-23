@@ -39,18 +39,43 @@
 			<input id="MasterStatusId" type="checkbox" onclick="onMasterStatusClick()">
 			<label for="MasterStatusId">is active</label>
 		</div>
-		<button onClick="onSyncConfigClick()">Sync Config</button>
-		<p></p>
-		
-		<button onClick="onGetStatisticClick()">Get Statistic</button>
-		<p></p>
-
-		<button onClick="onGetMasterRoleClick()">Master Role Request</button>
-		<p></p>
+		<table>
+			<tr>
+				<td>
+					<button onClick="onSyncConfigClick()">Sync Config</button>
+				</td>
+				<td>
+					<button onClick="onGetStatisticClick()">Get Statistic</button>
+				</td>
+				<td>
+					<button onClick="onGetMasterRoleClick()">Master Role Request</button>
+				</td>
+			</tr>
+		</table>
+		<table>
+			<tr>
+				<td>
+					<input id="SendMesageInputIdId" type="text"></input>
+				</td>
+				<td>
+					<button onClick="onSendMessageClick()">Send message</button>
+				</td>
+			</tr>
+		</table>
+		<table>
+			<tr>
+				<td>
+					<input id="SendSlaveShutdownInputIdId" type="text"></input>
+				</td>
+				<td>
+					<button onClick="onSendSlaveShutdownClick()">Shutdown slave</button>
+				</td>
+			</tr>
+		</table>
 
 		<p>Logs</p>
 		<div>
-			<textarea id="LoggerInputId" style="text-align:left;width:500px;height:100px"></textarea>
+			<textarea id="LoggerInputId" style="text-align:left;width:700px;height:150px"></textarea>
 		</div>
 	</fieldset>
 	<p></p>
