@@ -42,13 +42,19 @@ class MqttPoint:
         self.req_client = paho.Client()
         self.req_client.on_publish = None
         self.req_client.on_pre_connect = None
-        self.req_client.connect('broker.hivemq.com', 1883)
+        try:
+            self.req_client.connect('broker.hivemq.com', 1883)
+        except:
+            pass
 
         self.master_listener = paho.Client()
         self.master_listener.on_connect = MqttPoint.makeOnConnectListener(self)
         self.master_listener.on_message = MqttPoint.makeOnMessageListener(self)
         self.master_listener.on_pre_connect = None
-        self.master_listener.connect("broker.hivemq.com", 1883, 60)
+        try:
+            self.master_listener.connect('broker.hivemq.com', 1883, 60)
+        except:
+            pass
 
     def getMyName(self):
         return self.name
@@ -58,18 +64,30 @@ class MqttPoint:
         self.last_message_map[msg.msg_type] = (msg, on_reply_cb)
         print(f'{self.name} sending request: {str(msg)}')
         mqtt_msg = pickle.dumps(msg)
-        self.req_client.publish(self.request_channel, mqtt_msg, qos=1)
+        try:
+            self.req_client.publish(self.request_channel, mqtt_msg, qos=1)
+        except:
+            pass
 
     def sendMessageToListenerChannel(self, msg: Data_MessageBase):
         msg.slave_name = self.name
         print(f'{self.name} sending request to listener channel: {str(msg)}')
         mqtt_msg = pickle.dumps(msg)
-        self.master_listener.publish(self.listen_channel, mqtt_msg, qos=1)
+        try:
+            self.master_listener.publish(self.listen_channel, mqtt_msg, qos=1)
+        except:
+            pass
 
     def start(self):
-        self.master_listener.loop_start()
-        self.req_client.loop_start()
+        try:
+            self.master_listener.loop_start()
+            self.req_client.loop_start()
+        except:
+            pass
 
     def stop(self):
-        self.master_listener.loop_stop(force=True)
-        self.req_client.loop_stop(force=True)
+        try:
+            self.master_listener.loop_stop(force=True)
+            self.req_client.loop_stop(force=True)
+        except:
+            pass
